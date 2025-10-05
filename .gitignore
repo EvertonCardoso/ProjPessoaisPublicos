@@ -6,3 +6,12 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+*:Zone.Identifier
+downloads/
+cookies/
+__pycache__/
+*.pyc
+*.log
+.venv/
+venv/
+.DS_Store
