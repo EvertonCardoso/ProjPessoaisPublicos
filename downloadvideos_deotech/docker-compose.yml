@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./cookies:/app/cookies
+    environment:
+      - TZ=America/Sao_Paulo
+      - CLEANUP_ENABLED=true
+      - CLEANUP_TIME=00:01
+      - FLASK_ENV=production
+      - PORT=8085
+    restart: unless-stopped

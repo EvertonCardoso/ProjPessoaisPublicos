@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Baixar vídeo (TikTok / YouTube / Instagram / Facebook)</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; }
+    body { margin: 0; background: #0f172a; color: #e2e8f0; display: grid; place-items: center; min-height: 100vh; }
+    .card { background: #111827; border: 1px solid #1f2937; padding: 2rem; border-radius: 1rem; width: min(760px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .brand { display:block; height:36px; margin:-.25rem 0 1rem; opacity:.95;
+      filter: drop-shadow(0 1px 0 rgba(255,255,255,.04)) drop-shadow(0 6px 14px rgba(0,0,0,.35)); }
+    h1 { margin: 0 0 1rem; font-size: 1.35rem; }
+    p.hint { color: #94a3b8; margin-top: .25rem; }
+    form { display: grid; gap: .75rem; margin-top: 1rem; }
+    input[type="url"], input[type="file"], textarea { padding: .9rem 1rem; border-radius: .75rem; border: 1px solid #374151; background: #0b1220; color: #e5e7eb; }
+    textarea { min-height: 90px; resize: vertical; }
+    label { font-size:.9rem; color:#9ca3af; display:block; }
+    button { padding: .9rem 1rem; border: none; border-radius: .75rem; background: #22c55e; color: #0b1220; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .bar { margin-top:.75rem; height: auto; min-height:44px; border-radius: .75rem; display:flex; align-items:center; justify-content:center; font-weight:600; padding:.5rem; text-align:center; white-space:pre-wrap; }
+    .bar.ok { background:#065f46; color:#d1fae5; }
+    .bar.wait { background:#16a34a; color:#062d1f; }
+    .bar.err { background:#7f1d1d; color:#fee2e2; }
+    .progress-wrap { margin-top:.5rem; background:#0b1220; border:1px solid #374151; border-radius:.75rem; height:14px; overflow:hidden; }
+    .progress { height:100%; width:0%; background:#22c55e; transition:width .2s ease; }
+    .legal { margin-top: 1rem; font-size: .875rem; color: #9ca3af; }
+    .footer { margin-top: 1.25rem; font-size: .85rem; color: #64748b; }
+    .ok { color:#22c55e; font-weight:600; }
+    .warn { color:#fbbf24; font-weight:600; }
+    code { background:#0b1220; padding:.1rem .3rem; border-radius:.35rem; }
+
+    /* Rodapé de créditos */
+    .credits {
+      margin-top: 0.75rem;
+      font-size: .8rem;
+      color: #94a3b8;
+      border-top: 1px solid #1f2937;
+      padding-top: .75rem;
+      display: flex;
+      gap: .4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .credits a {
+      color: #93c5fd;
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(147,197,253,.35);
+    }
+    .credits a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- Logo no topo -->
+    <a href="/" aria-label="Página inicial">
+      <img src="{{ url_for('static', filename='logo_white.png') }}" alt="Logo" class="brand" />
+    </a>
+
+    <h1>Baixar vídeo (TikTok / YouTube / Instagram / Facebook)</h1>
+    <p class="hint">
+      Cole a URL e clique em <strong>Baixar</strong>. O arquivo será entregue no navegador e salvo em <code>downloads/</code>.
+    </p>
+
+    <form id="form" method="POST" action="/start" enctype="multipart/form-data">
+      <input id="url" name="url" type="url"
+             placeholder="Cole aqui a URL do TikTok, YouTube, Instagram ou Facebook"
+             required />
+
+      <label>Cookie Header (opcional, recomendado se pedir login):
+        <textarea id="cookie_header" name="cookie_header"
+          placeholder="Ex.: sessionid=...; ttwid=...; sid_guard=... (TikTok) / datr=...; c_user=... (Facebook/Instagram)"></textarea>
+      </label>
+
+      <label>cookies.txt (opcional, formato Netscape):
+        <input id="cookies" name="cookies" type="file" accept=".txt" />
+      </label>
+
+      <button id="btn" type="submit">Baixar</button>
+    </form>
+
+    <div id="status" class="bar" aria-live="polite" style="display:none;"></div>
+    <div class="progress-wrap" style="display:none;">
+      <div id="progress" class="progress"></div>
+    </div>
+
+    <p class="hint" style="margin-top:.5rem">
+      {% if has_cookies %}
+        <span class="ok">Detectado ./cookies/cookies.txt — será usado automaticamente.</span>
+      {% else %}
+        <span class="warn">Sem cookies locais.</span>
+      {% endif %}
+    </p>
+
+    <p class="legal">Baixe apenas conteúdos que você tem direito. Respeite os Termos das plataformas e leis de copyright.</p>
+    <div class="footer">Rodando localmente via Docker. Porta {{ port }}.</div>
+
+    <!-- Rodapé de créditos -->
+    <div class="credits">
+      Desenvolvido por <strong>Everton Cardoso Deolinda</strong> —
+      <a href="https://www.linkedin.com/in/everton-cardoso-deolinda-2853861b2/" target="_blank" rel="noopener noreferrer">
+        linkedin.com/in/everton-cardoso-deolinda-2853861b2
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('form');
+    const btn  = document.getElementById('btn');
+    const urlI = document.getElementById('url');
+    const cookiesI = document.getElementById('cookies');
+    const cookieHeaderI = document.getElementById('cookie_header');
+    const statusBar = document.getElementById('status');
+    const progressWrap = document.querySelector('.progress-wrap');
+    const progressEl = document.getElementById('progress');
+
+    function setStatus(type, message){
+      statusBar.className = 'bar ' + type;
+      statusBar.textContent = message;
+      statusBar.style.display = 'flex';
+    }
+    function clearStatus(){
+      statusBar.style.display = 'none';
+      statusBar.textContent = '';
+      statusBar.className = 'bar';
+    }
+    function setDisabled(v){
+      btn.disabled = v; urlI.disabled = v; cookiesI.disabled = v; cookieHeaderI.disabled = v;
+    }
+    function setProgress(pct){
+      progressWrap.style.display = 'block';
+      progressEl.style.width = (Math.max(0, Math.min(100, pct)) || 0) + '%';
+    }
+    function hideProgress(){
+      progressWrap.style.display = 'none';
+      progressEl.style.width = '0%';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const fd = new FormData(form);
+      setDisabled(true);
+      setStatus('wait', 'Preparando download...');
+      setProgress(0);
+
+      try {
+        const startResp = await fetch('/start', { method: 'POST', body: fd });
+        if (!startResp.ok) {
+          const raw = await startResp.text();
+          setStatus('err', `Erro ${startResp.status}: ${raw || 'Falha ao iniciar.'}`);
+          setDisabled(false);
+          hideProgress();
+          return;
+        }
+        const { job_id } = await startResp.json();
+
+        setStatus('wait', 'Baixando... aguarde');
+        const es = new EventSource(`/progress/${job_id}`);
+
+        es.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            if (data.type === 'progress') {
+              const pct = data.percent || 0;
+              setProgress(pct);
+              statusBar.textContent = `Baixando... ${pct.toFixed(1)}%` +
+                (data.speed ? ` • ${data.speed}` : '') +
+                (data.eta ? ` • ETA ${data.eta}` : '');
+            } else if (data.type === 'done') {
+              es.close();
+              setProgress(100);
+              setStatus('ok', 'Processando arquivo...');
+              fetch(`/result/${job_id}`).then(async (resp) => {
+                if (!resp.ok) {
+                  const t = await resp.text();
+                  setStatus('err', `Erro ${resp.status}: ${t || 'Falha ao obter resultado.'}`);
+                  setDisabled(false);
+                  return;
+                }
+                let filename = 'video.mp4';
+                const cd = resp.headers.get('Content-Disposition');
+                if (cd) {
+                  const m = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(cd);
+                  if (m) filename = decodeURIComponent(m[1] || m[2]);
+                }
+                const blob = await resp.blob();
+                const url  = URL.createObjectURL(blob);
+                const a    = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+                setStatus('ok', 'Download concluído ✅');
+                setDisabled(false);
+                setTimeout(() => { hideProgress(); clearStatus(); }, 6000);
+              });
+            } else if (data.type === 'error') {
+              es.close();
+              setStatus('err', data.message || 'Erro no download.');
+              setDisabled(false);
+              hideProgress();
+            }
+          } catch (_) {}
+        };
+
+        es.onerror = () => {
+          es.close();
+          setStatus('err', 'Falha no canal de progresso.');
+          setDisabled(false);
+          hideProgress();
+        };
+      } catch (err) {
+        setStatus('err', 'Erro: ' + (err?.message || err));
+        setDisabled(false);
+        hideProgress();
+      }
+    });
+  </script>
+</body>
+</html>
